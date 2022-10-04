@@ -18,7 +18,9 @@ const EffectShader = {
         'far': { value: 200.0 },
         'near': { value: 0.5 },
         'blueNoise': { value: null },
-        'noiseResolution': { value: new THREE.Vector2() }
+        'noiseResolution': { value: new THREE.Vector2() },
+        'density': { value: 1.0 / 64.0 },
+        'distanceAttenuation': { value: 0.005 }
     },
 
     vertexShader: /* glsl */ `
@@ -46,6 +48,8 @@ const EffectShader = {
     uniform float mapSize;
     uniform float far;
     uniform float near;
+    uniform float density;
+    uniform float distanceAttenuation;
     #include <packing>
     vec3 WorldPosFromDepth(float depth, vec2 coord) {
       float z = depth * 2.0 - 1.0;
@@ -201,7 +205,7 @@ return result;
             float samples = round(60.0 + 8.0 * blueNoiseSample.x);//64.0;
             for(float i = 0.0; i < samples; i++) {
               vec3 samplePos = mix(cameraPos, worldPos, i / samples);
-              illum += (1.0 - inShadow(samplePos)) * (distance(cameraPos, worldPos) / samples) * exp(-0.005 * distance(worldPos, lightPos));
+              illum += (1.0 - inShadow(samplePos)) * (distance(cameraPos, worldPos) * density) * exp(-distanceAttenuation * distance(worldPos, lightPos));
             }
            illum /= samples;
             gl_FragColor = vec4(vec3(clamp((1.0 - exp(-illum)), 0.0, 0.5)), depth);

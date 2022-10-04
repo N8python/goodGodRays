@@ -184,7 +184,7 @@ async function main() {
     const pointLight = new THREE.PointLight(new THREE.Color(1.0, 1.0, 1.0), 5, 200);
     pointLight.position.copy(light.position);
     pointLight.castShadow = true;
-    pointLight.shadow.bias = -0.005;
+    //pointLight.shadow.bias = -0.005;
     pointLight.shadow.mapSize.width = 1024;
     pointLight.shadow.mapSize.height = 1024;
     scene.add(pointLight);
@@ -198,8 +198,12 @@ async function main() {
     const gui = new GUI();
     const effectController = {
         edgeStrength: 2,
-        edgeRadius: 2
+        edgeRadius: 2,
+        distanceAttenuation: 0.005,
+        density: 1.0 / 128.0
     }
+    gui.add(effectController, "density", 0, 1.0 / 16.0, 0.0001).name("Density");
+    gui.add(effectController, "distanceAttenuation", 0, 0.1, 0.0001).name("Distance Attenuation");
     gui.add(effectController, "edgeStrength", 0, 8, 0.001).name("Edge Strength");
     gui.add(effectController, "edgeRadius", 0, 4, 1.0).name("Edge Radius");
     const noiseTex = await new THREE.TextureLoader().loadAsync("bluenoise.png");
@@ -225,7 +229,7 @@ async function main() {
              scene.overrideMaterial = null;*/
         }
         light.position.y = 50.0 + 10.0 * Math.sin(performance.now() / 2500);
-        pointLight.position.copy(light.position)
+        pointLight.position.copy(light.position);
         if (frame === 0) {
             renderer.shadowMap.needsUpdate = true;
         } else {
@@ -249,6 +253,8 @@ async function main() {
         effectPass.uniforms["near"].value = pointLight.shadow.camera.near;
         effectPass.uniforms["far"].value = pointLight.shadow.camera.far;
         effectPass.uniforms["blueNoise"].value = noiseTex;
+        effectPass.uniforms["density"].value = effectController.density;
+        effectPass.uniforms["distanceAttenuation"].value = effectController.distanceAttenuation;
         renderer.setRenderTarget(godraysTexture);
         effectQuad.render(renderer);
         renderer.setRenderTarget(godraysBlurTexture);

@@ -26,6 +26,7 @@ const EffectCompositer = {
 			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
 		}`,
     fragmentShader: /*glsl*/ `
+    #include <common>
     uniform sampler2D godrays;
     uniform sampler2D sceneDiffuse;
     uniform sampler2D sceneDepth;
@@ -33,6 +34,7 @@ const EffectCompositer = {
     uniform float edgeRadius;
     uniform vec2 resolution;
     varying vec2 vUv;
+    #include <dithering_pars_fragment>
     float linearize_depth(float d,float zNear,float zFar)
     {
         return zNear * zFar / (zFar + d * (zNear - zFar));
@@ -70,6 +72,7 @@ const EffectCompositer = {
             bestChoice = texture2D(godrays, texel).x;
         }*/
         gl_FragColor = vec4(mix(diffuse.rgb, vec3(1.0), bestChoice), 1.0);
+        #include <dithering_fragment>
     }  
         `
 }
