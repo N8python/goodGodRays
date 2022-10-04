@@ -20,6 +20,7 @@ const EffectShader = {
         'blueNoise': { value: null },
         'noiseResolution': { value: new THREE.Vector2() },
         'density': { value: 1.0 / 64.0 },
+        'maxDensity': { value: 0.5 },
         'distanceAttenuation': { value: 0.005 }
     },
 
@@ -49,6 +50,7 @@ const EffectShader = {
     uniform float far;
     uniform float near;
     uniform float density;
+    uniform float maxDensity;
     uniform float distanceAttenuation;
     #include <packing>
     vec3 WorldPosFromDepth(float depth, vec2 coord) {
@@ -208,7 +210,7 @@ return result;
               illum += (1.0 - inShadow(samplePos)) * (distance(cameraPos, worldPos) * density) * exp(-distanceAttenuation * distance(worldPos, lightPos));
             }
            illum /= samples;
-            gl_FragColor = vec4(vec3(clamp((1.0 - exp(-illum)), 0.0, 0.5)), depth);
+            gl_FragColor = vec4(vec3(clamp((1.0 - exp(-illum)), 0.0, maxDensity)), depth);
            /* vec3 reflectDir = reflect(normalize(worldPos - cameraPos), normal);
             vec3 pos = worldPos + 0.01 * reflectDir;
             vec3 reflectColor = vec3(0.0);

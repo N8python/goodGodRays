@@ -92,14 +92,14 @@ async function main() {
     //  scene.add(torusKnot);
     const dragonGeo = (await AssetManager.loadGLTFAsync("dragon.glb")).scene.children[0].children[0].geometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2)).applyMatrix4(new THREE.Matrix4().makeScale(1.75, 1.75, 1.75));
     const dragon2 = new THREE.Mesh(dragonGeo,
-        new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, envMap: environment, metalness: 0.5, roughness: 0.2, color: new THREE.Color(1.0, 0.0, 0.0) }));
+        new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, envMap: environment, envMapIntensity: 0.05, metalness: 0.5, roughness: 0.2, color: new THREE.Color(1.0, 0.0, 0.0), dithering: true }));
     dragon2.position.x = 80;
     dragon2.rotation.y = Math.PI / 2;
     dragon2.castShadow = true;
     dragon2.receiveShadow = true;
     scene.add(dragon2);
     const bunnyGeo = (await AssetManager.loadGLTFAsync("bunny.glb")).scene.children[0].children[0].geometry;
-    const bunny = new THREE.Mesh(bunnyGeo.applyMatrix4(new THREE.Matrix4().makeScale(0.075 / 2, 0.075 / 2, 0.075 / 2)).applyMatrix4(new THREE.Matrix4().makeTranslation(0, 9, 0)), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, envMap: environment, metalness: 0.5, roughness: 0.2, color: new THREE.Color(0.0, 0.0, 1.0) }));
+    const bunny = new THREE.Mesh(bunnyGeo.applyMatrix4(new THREE.Matrix4().makeScale(0.075 / 2, 0.075 / 2, 0.075 / 2)).applyMatrix4(new THREE.Matrix4().makeTranslation(0, 9, 0)), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, envMap: environment, envMapIntensity: 0.05, metalness: 0.5, roughness: 0.2, color: new THREE.Color(0.0, 0.0, 1.0), dithering: true }));
     bunny.position.x = -85;
     bunny.castShadow = true;
     bunny.receiveShadow = true;
@@ -184,7 +184,7 @@ async function main() {
     const pointLight = new THREE.PointLight(new THREE.Color(1.0, 1.0, 1.0), 5, 200);
     pointLight.position.copy(light.position);
     pointLight.castShadow = true;
-    //pointLight.shadow.bias = -0.005;
+    pointLight.shadow.bias = -0.005;
     pointLight.shadow.mapSize.width = 1024;
     pointLight.shadow.mapSize.height = 1024;
     scene.add(pointLight);
@@ -200,10 +200,14 @@ async function main() {
         edgeStrength: 2,
         edgeRadius: 2,
         distanceAttenuation: 0.005,
-        density: 1.0 / 128.0
+        density: 1.0 / 128.0,
+        color: [1, 1, 1],
+        maxDensity: 0.5
     }
     gui.add(effectController, "density", 0, 1.0 / 16.0, 0.0001).name("Density");
+    gui.add(effectController, "maxDensity", 0, 1.0, 0.001).name("Max Density");
     gui.add(effectController, "distanceAttenuation", 0, 0.1, 0.0001).name("Distance Attenuation");
+    gui.addColor(effectController, "color").name("Color");
     gui.add(effectController, "edgeStrength", 0, 8, 0.001).name("Edge Strength");
     gui.add(effectController, "edgeRadius", 0, 4, 1.0).name("Edge Radius");
     const noiseTex = await new THREE.TextureLoader().loadAsync("bluenoise.png");
@@ -230,6 +234,8 @@ async function main() {
         }
         light.position.y = 50.0 + 10.0 * Math.sin(performance.now() / 2500);
         pointLight.position.copy(light.position);
+        pointLight.color.setRGB(...effectController.color);
+        light.material.color.copy(pointLight.color);
         if (frame === 0) {
             renderer.shadowMap.needsUpdate = true;
         } else {
@@ -254,6 +260,7 @@ async function main() {
         effectPass.uniforms["far"].value = pointLight.shadow.camera.far;
         effectPass.uniforms["blueNoise"].value = noiseTex;
         effectPass.uniforms["density"].value = effectController.density;
+        effectPass.uniforms["maxDensity"].value = effectController.maxDensity;
         effectPass.uniforms["distanceAttenuation"].value = effectController.distanceAttenuation;
         renderer.setRenderTarget(godraysTexture);
         effectQuad.render(renderer);
@@ -268,6 +275,7 @@ async function main() {
         effectCompositer.uniforms["resolution"].value = new THREE.Vector2(clientWidth, clientHeight);
         effectCompositer.uniforms["edgeRadius"].value = effectController.edgeRadius;
         effectCompositer.uniforms["edgeStrength"].value = effectController.edgeStrength;
+        effectCompositer.uniforms["color"].value = new THREE.Vector3(...effectController.color);
         effectCompositer.uniforms["godrays"].value = godraysTexture.texture;
         renderer.setRenderTarget(null);
         composer.render();

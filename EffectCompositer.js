@@ -16,7 +16,8 @@ const EffectCompositer = {
         'time': { value: 0.0 },
         'cameraPos': { value: null },
         'edgeRadius': { value: 0.0 },
-        'edgeStrength': { value: 0.0 }
+        'edgeStrength': { value: 0.0 },
+        'color': { value: new THREE.Vector3() }
     },
 
     vertexShader: /* glsl */ `
@@ -33,7 +34,9 @@ const EffectCompositer = {
     uniform float edgeStrength;
     uniform float edgeRadius;
     uniform vec2 resolution;
+    uniform vec3 color;
     varying vec2 vUv;
+    #define DITHERING
     #include <dithering_pars_fragment>
     float linearize_depth(float d,float zNear,float zFar)
     {
@@ -71,7 +74,7 @@ const EffectCompositer = {
             minDist = diff;
             bestChoice = texture2D(godrays, texel).x;
         }*/
-        gl_FragColor = vec4(mix(diffuse.rgb, vec3(1.0), bestChoice), 1.0);
+        gl_FragColor = vec4(mix(diffuse.rgb, color, bestChoice), 1.0);
         #include <dithering_fragment>
     }  
         `
