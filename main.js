@@ -1,18 +1,23 @@
 import * as THREE from 'https://cdn.skypack.dev/pin/three@v0.137.0-X5O2PK3x44y1WRry67Kr/mode=imports/optimized/three.js';
 import { EffectComposer } from 'https://unpkg.com/three@0.137.0/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'https://unpkg.com/three@0.137.0/examples/jsm/postprocessing/RenderPass.js';
+import { FullScreenQuad } from 'https://unpkg.com/three@0.137.0/examples/jsm/postprocessing/Pass.js';
 import { ShaderPass } from 'https://unpkg.com/three@0.137.0/examples/jsm/postprocessing/ShaderPass.js';
+import { VerticalBlurShader } from 'https://unpkg.com/three@0.137.0/examples/jsm/shaders/VerticalBlurShader.js';
+import { HorizontalBlurShader } from 'https://unpkg.com/three@0.137.0/examples/jsm/shaders/HorizontalBlurShader.js';
 import { SMAAPass } from 'https://unpkg.com/three@0.137.0/examples/jsm/postprocessing/SMAAPass.js';
 import { GammaCorrectionShader } from 'https://unpkg.com/three@0.137.0/examples/jsm/shaders/GammaCorrectionShader.js';
 import { EffectShader } from "./EffectShader.js";
+import { EffectCompositer } from "./EffectCompositer.js";
 import { OrbitControls } from 'https://unpkg.com/three@0.137.0/examples/jsm/controls/OrbitControls.js';
 import { TeapotGeometry } from 'https://unpkg.com/three@0.137.0/examples/jsm/geometries/TeapotGeometry.js';
 import { AssetManager } from './AssetManager.js';
 import { Stats } from "./stats.js";
+import { GUI } from 'https://unpkg.com/three@0.137.0/examples/jsm/libs/lil-gui.module.min.js';
 async function main() {
     // Setup basic renderer, controls, and profiler
-    const clientWidth = window.innerWidth * 0.99;
-    const clientHeight = window.innerHeight * 0.98;
+    const clientWidth = window.innerWidth;
+    const clientHeight = window.innerHeight;
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, clientWidth / clientHeight, 0.1, 1000);
     camera.position.set(50, 75, 50);
@@ -21,6 +26,7 @@ async function main() {
     document.body.appendChild(renderer.domElement);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = false;
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 25, 0);
     const stats = new Stats();
@@ -123,44 +129,30 @@ async function main() {
         magFilter: THREE.NearestFilter
     });
     defaultTexture.depthTexture = new THREE.DepthTexture(clientWidth, clientHeight, THREE.FloatType);
-    const normalTexture = new THREE.WebGLRenderTarget(clientWidth, clientWidth, {
+    const godraysTexture = new THREE.WebGLRenderTarget(clientWidth / 2, clientHeight / 2, {
         minFilter: THREE.LinearFilter,
-        magFilter: THREE.NearestFilter,
+        magFilter: THREE.LinearFilter,
         type: THREE.FloatType
     });
-    normalTexture.depthTexture = new THREE.DepthTexture(clientWidth, clientWidth, THREE.FloatType);
-    const normalMat = new THREE.MeshNormalMaterial();
+    godraysTexture.depthTexture = new THREE.DepthTexture(clientWidth / 2, clientHeight / 2, THREE.FloatType);
+    const godraysBlurTexture = godraysTexture.clone();
     // Post Effects
     const composer = new EffectComposer(renderer);
     const smaaPass = new SMAAPass(clientWidth, clientHeight);
-    const effectPass = new ShaderPass(EffectShader);
-    composer.addPass(effectPass);
+    const effectCompositer = new ShaderPass(EffectCompositer);
+    composer.addPass(effectCompositer);
     composer.addPass(new ShaderPass(GammaCorrectionShader));
     composer.addPass(smaaPass);
     const light = new THREE.Mesh(new THREE.SphereGeometry(5, 32, 32), new THREE.MeshBasicMaterial());
     light.position.set(0, 50, 0);
     scene.add(light);
-    const cubeRenderTargetDepth = new THREE.WebGLCubeRenderTarget(1024, {
+    const cubeRenderTargetDepth = new THREE.WebGLCubeRenderTarget(512, {
         type: THREE.FloatType,
         minFilter: THREE.NearestFilter,
         maxFilter: THREE.NearestFilter
     });
     const cubeCameraDepth = new THREE.CubeCamera(0.1, 1000, cubeRenderTargetDepth);
     scene.add(cubeCameraDepth);
-    const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(512, {
-        type: THREE.FloatType,
-        minFilter: THREE.NearestFilter,
-        maxFilter: THREE.NearestFilter
-    });
-    const cubeCamera = new THREE.CubeCamera(0.1, 1000, cubeRenderTarget);
-    scene.add(cubeCamera);
-    const cubeRenderFallback = new THREE.WebGLCubeRenderTarget(512, {
-        type: THREE.FloatType,
-        minFilter: THREE.NearestFilter,
-        maxFilter: THREE.NearestFilter
-    });
-    const cubeCameraFallback = new THREE.CubeCamera(0.1, 1000, cubeRenderFallback);
-    scene.add(cubeCameraFallback);
     const customMeshDepth = new THREE.ShaderMaterial({
         uniforms: {
             lightPos: { value: light.position }
@@ -186,48 +178,92 @@ async function main() {
     const pointLight = new THREE.PointLight(new THREE.Color(1.0, 1.0, 1.0), 5, 200);
     pointLight.position.copy(light.position);
     pointLight.castShadow = true;
-    pointLight.shadow.bias = -0.0005;
+    pointLight.shadow.bias = -0.0001;
+    pointLight.shadow.mapSize.width = 512;
+    pointLight.shadow.mapSize.height = 512;
     scene.add(pointLight);
+    let frame = 0;
+    const effectQuad = new FullScreenQuad(new THREE.ShaderMaterial(EffectShader));
+    const verticalBlur = new FullScreenQuad(new THREE.ShaderMaterial(VerticalBlurShader));
+    verticalBlur.material.uniforms.v.value = 0.25 / (clientHeight / 2.0);
+    const horizontalBlur = new FullScreenQuad(new THREE.ShaderMaterial(HorizontalBlurShader));
+    horizontalBlur.material.uniforms.h.value = 0.25 / (clientWidth / 2.0);
+    const effectPass = effectQuad.material;
+    const gui = new GUI();
+    const effectController = {
+        edgeStrength: 2,
+        edgeRadius: 2
+    }
+    gui.add(effectController, "edgeStrength", 0, 8, 0.001).name("Edge Strength");
+    gui.add(effectController, "edgeRadius", 0, 4, 1.0).name("Edge Radius");
+    const noiseTex = await new THREE.TextureLoader().loadAsync("bluenoise.png");
+    noiseTex.wrapS = THREE.RepeatWrapping;
+    noiseTex.wrapT = THREE.RepeatWrapping;
+    noiseTex.magFilter = THREE.NearestFilter;
+    noiseTex.minFilter = THREE.NearestFilter;
 
     function animate() {
-        lightDepthFallback.position.copy(light.position);
-        scene.overrideMaterial = customMeshDepth;
-        cubeCameraDepth.position.copy(light.position);
-        light.visible = false;
-        lightDepthFallback.visible = true;
-        //console.log(renderer.getClearColor(new THREE.Vector3()));
-        renderer.setClearColor(new THREE.Color(1.0, 0.0, 0.0), 1.0);
-        cubeCameraDepth.update(renderer, scene);
-        renderer.setClearColor(new THREE.Color(0.0, 0.0, 0.0), 1.0);
-        //scene.background = cubeRenderTargetDepth.texture;
-        light.visible = true;
-        lightDepthFallback.visible = false;
-        scene.overrideMaterial = null;
+        if (frame === 0) {
+            /* lightDepthFallback.position.copy(light.position);
+             scene.overrideMaterial = customMeshDepth;
+             cubeCameraDepth.position.copy(light.position);
+             light.visible = false;
+             lightDepthFallback.visible = true;
+             //console.log(renderer.getClearColor(new THREE.Vector3()));
+             renderer.setClearColor(new THREE.Color(1.0, 0.0, 0.0), 1.0);
+             cubeCameraDepth.update(renderer, scene);
+             renderer.setClearColor(new THREE.Color(0.0, 0.0, 0.0), 1.0);
+             //scene.background = cubeRenderTargetDepth.texture;
+             light.visible = true;
+             lightDepthFallback.visible = false;
+             scene.overrideMaterial = null;*/
+        }
+        light.position.y = 50.0 + 10.0 * Math.sin(performance.now() / 2500);
+        pointLight.position.copy(light.position)
+        if (frame === 0) {
+            renderer.shadowMap.needsUpdate = true;
+        } else {
+            renderer.shadowMap.needsUpdate = true;
+        }
         renderer.setRenderTarget(defaultTexture);
         renderer.clear();
         renderer.render(scene, camera);
-        scene.overrideMaterial = normalMat;
-        renderer.setRenderTarget(normalTexture);
-        renderer.clear();
-        renderer.render(scene, camera);
-        scene.overrideMaterial = null;
         effectPass.uniforms["sceneDiffuse"].value = defaultTexture.texture;
         effectPass.uniforms["sceneDepth"].value = defaultTexture.depthTexture;
-        effectPass.uniforms["sceneCube"].value = cubeRenderTarget.texture;
-        effectPass.uniforms["depthCube"].value = cubeRenderTargetDepth.texture;
-        effectPass.uniforms["environment"].value = cubeRenderFallback.texture;
+        effectPass.uniforms["depthCube"].value = pointLight.shadow.map.texture;
         camera.updateMatrixWorld();
         effectPass.uniforms["projectionMatrixInv"].value = camera.projectionMatrixInverse;
         effectPass.uniforms["viewMatrixInv"].value = camera.matrixWorld;
         effectPass.uniforms["lightPos"].value = light.position;
-        effectPass.uniforms['resolution'].value = new THREE.Vector2(clientWidth, clientHeight);
+        effectPass.uniforms['resolution'].value = new THREE.Vector2(godraysTexture.width, godraysTexture.height);
+        effectPass.uniforms['noiseResolution'].value = new THREE.Vector2(noiseTex.image.width, noiseTex.image.height);
+        console.log(effectPass.uniforms['noiseResolution'].value);
         effectPass.uniforms['time'].value = performance.now() / 1000;
-        effectPass.uniforms["normalTexture"].value = normalTexture.texture;
         effectPass.uniforms["cameraPos"].value = camera.position;
+        effectPass.uniforms['mapSize'].value = pointLight.shadow.mapSize.height;
+        effectPass.uniforms["near"].value = pointLight.shadow.camera.near;
+        effectPass.uniforms["far"].value = pointLight.shadow.camera.far;
+        effectPass.uniforms["blueNoise"].value = noiseTex;
+        renderer.setRenderTarget(godraysTexture);
+        effectQuad.render(renderer);
+        renderer.setRenderTarget(godraysBlurTexture);
+        /*  horizontalBlur.material.uniforms.tDiffuse.value = godraysTexture.texture;
+          horizontalBlur.render(renderer);
+          renderer.setRenderTarget(godraysTexture);
+          verticalBlur.material.uniforms.tDiffuse.value = godraysBlurTexture.texture;
+          verticalBlur.render(renderer);*/
+        effectCompositer.uniforms["sceneDiffuse"].value = defaultTexture.texture;
+        effectCompositer.uniforms["sceneDepth"].value = defaultTexture.depthTexture;
+        effectCompositer.uniforms["resolution"].value = new THREE.Vector2(clientWidth, clientHeight);
+        effectCompositer.uniforms["edgeRadius"].value = effectController.edgeRadius;
+        effectCompositer.uniforms["edgeStrength"].value = effectController.edgeStrength;
+        effectCompositer.uniforms["godrays"].value = godraysTexture.texture;
+        renderer.setRenderTarget(null);
         composer.render();
         controls.update();
         stats.update();
         requestAnimationFrame(animate);
+        frame++;
     }
     requestAnimationFrame(animate);
 }
