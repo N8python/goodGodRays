@@ -185,8 +185,8 @@ async function main() {
     pointLight.position.copy(light.position);
     pointLight.castShadow = true;
     pointLight.shadow.bias = -0.005;
-    pointLight.shadow.mapSize.width = 512;
-    pointLight.shadow.mapSize.height = 512;
+    pointLight.shadow.mapSize.width = 1024;
+    pointLight.shadow.mapSize.height = 1024;
     scene.add(pointLight);
     let frame = 0;
     const effectQuad = new FullScreenQuad(new THREE.ShaderMaterial(EffectShader));
@@ -243,7 +243,6 @@ async function main() {
         effectPass.uniforms["lightPos"].value = light.position;
         effectPass.uniforms['resolution'].value = new THREE.Vector2(godraysTexture.width, godraysTexture.height);
         effectPass.uniforms['noiseResolution'].value = new THREE.Vector2(noiseTex.image.width, noiseTex.image.height);
-        console.log(effectPass.uniforms['noiseResolution'].value);
         effectPass.uniforms['time'].value = performance.now() / 1000;
         effectPass.uniforms["cameraPos"].value = camera.position;
         effectPass.uniforms['mapSize'].value = pointLight.shadow.mapSize.height;
